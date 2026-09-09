@@ -41,14 +41,17 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
   import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
 
-  // ---- KONFIGURACE ----
-  // Musí být STEJNÝ firebaseConfig jako na obchodnik.html
-  const firebaseConfig = {
-    apiKey: "TVOJE_API_KEY",
-    authDomain: "TVUJ-PROJEKT.firebaseapp.com",
-    databaseURL: "https://TVUJ-PROJEKT-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "TVUJ-PROJEKT",
-  };
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAhJzNceVceeaX9IQcJQcKKMObIMYzrIac",
+  authDomain: "lightning-terminal-test.firebaseapp.com",
+  databaseURL: "https://lightning-terminal-test-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "lightning-terminal-test",
+  storageBucket: "lightning-terminal-test.firebasestorage.app",
+  messagingSenderId: "117608694443",
+  appId: "1:117608694443:web:54d395472aba9cae3dedee",
+  measurementId: "G-WGKZJBNLNF"
+};
   const LN_ADDRESS = "obchodnik@walletofsatoshi.com"; // TODO: nahraď skutečnou Lightning Address obchodníka
   // ----------------------
 
