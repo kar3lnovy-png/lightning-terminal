@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Platba Lightning</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0b0b0f; color: #fff; text-align: center; padding: 24px;
+  }
+  .card { max-width: 360px; width: 100%; }
+  .amount { font-size: 2.4rem; font-weight: 700; margin: 8px 0; }
+  .sats { color: #f7931a; font-weight: 600; }
+  .status { color: #9a9aa5; font-size: 0.95rem; margin-top: 12px; min-height: 1.4em; }
+  .spinner {
+    width: 36px; height: 36px; margin: 20px auto;
+    border: 3px solid #2a2a33; border-top-color: #f7931a;
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  a.btn {
+    display: inline-block; margin-top: 20px; padding: 14px 28px;
+    background: #f7931a; color: #0b0b0f; text-decoration: none;
+    font-weight: 700; border-radius: 12px; font-size: 1.05rem;
+  }
+  .error { color: #ff5c5c; margin-top: 16px; font-size: 0.95rem; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div id="content">
+    <div class="spinner"></div>
+    <div class="status" id="status">Načítám platbu…</div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+  import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+
+  // ---- KONFIGURACE ----
+  // Musí být STEJNÝ firebaseConfig jako na obchodnik.html
+  const firebaseConfig = {
+    apiKey: "TVOJE_API_KEY",
+    authDomain: "TVUJ-PROJEKT.firebaseapp.com",
+    databaseURL: "https://TVUJ-PROJEKT-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "TVUJ-PROJEKT",
+  };
+  const LN_ADDRESS = "obchodnik@walletofsatoshi.com"; // TODO: nahraď skutečnou Lightning Address obchodníka
+  // ----------------------
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  const statusEl = document.getElementById('status');
+  const contentEl = document.getElementById('content');
+
+  function showError(msg) {
+    contentEl.innerHTML = `<div class="error">${msg}</div>`;
+  }
+
+  async function run() {
+    let paymentData;
+    try {
+      const snapshot = await get(ref(db, 'currentPayment'));
+      if (!snapshot.exists()) {
+        showError('Zatím nebyla zadána žádná platba. Počkej, až ji obchodník zadá.');
+        return;
+      }
+      paymentData = snapshot.val();
+    } catch (err) {
+      showError('Nepodařilo se načíst platbu: ' + err.message);
+      return;
+    }
+
+    const amountCzk = paymentData.amount;
+    if (!amountCzk || amountCzk <= 0) {
+      showError('Neplatná částka.');
+      return;
+    }
+
+    statusEl.textContent = 'Zjišťuji aktuální kurz…';
+
+    let czkPerBtc;
+    try {
+      const res = await fetch(
+        "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=czk"
+      );
+      if (!res.ok) throw new Error("API nedostupné");
+      const data = await res.json();
+      czkPerBtc = data.bitcoin.czk;
+    } catch (e) {
+      showError('Nepodařilo se načíst aktuální kurz BTC/CZK. Zkus to znovu.');
+      return;
+    }
+
+    const sats = Math.round((amountCzk / czkPerBtc) * 100000000);
+    const msats = sats * 1000;
+
+    if (sats < 1) {
+      showError('Vypočtená částka je příliš nízká.');
+      return;
+    }
+
+    const lnUri = `lightning:${LN_ADDRESS}?amount=${msats}`;
+
+    contentEl.innerHTML = `
+      <div class="amount">${amountCzk.toLocaleString('cs-CZ')} Kč</div>
+      <div class="sats">≈ ${sats.toLocaleString('cs-CZ')} sat</div>
+      <div class="status">Přesměrovávám do peněženky…</div>
+      <a class="btn" href="${lnUri}">Otevřít peněženku ručně</a>
+    `;
+
+    window.location.href = lnUri;
+  }
+
+  run();
+</script>
+</body>
+</html>
