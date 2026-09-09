@@ -42,16 +42,16 @@
   import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
 
 
-const firebaseConfig = {
-  apiKey: "AIzaSyAhJzNceVceeaX9IQcJQcKKMObIMYzrIac",
-  authDomain: "lightning-terminal-test.firebaseapp.com",
-  databaseURL: "https://lightning-terminal-test-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "lightning-terminal-test",
-  storageBucket: "lightning-terminal-test.firebasestorage.app",
-  messagingSenderId: "117608694443",
-  appId: "1:117608694443:web:54d395472aba9cae3dedee",
-  measurementId: "G-WGKZJBNLNF"
-};
+  const firebaseConfig = {
+    apiKey: "AIzaSyAhJzNceVceeaX9IQcJQcKKMObIMYzrIac",
+    authDomain: "lightning-terminal-test.firebaseapp.com",
+    databaseURL: "https://lightning-terminal-test-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "lightning-terminal-test",
+    storageBucket: "lightning-terminal-test.firebasestorage.app",
+    messagingSenderId: "117608694443",
+    appId: "1:117608694443:web:54d395472aba9cae3dedee",
+    measurementId: "G-WGKZJBNLNF"
+  };
   const LN_ADDRESS = "fetidspin865@walletofsatoshi.com"; // TODO: nahraď skutečnou Lightning Address obchodníka
   // ----------------------
 
@@ -108,16 +108,48 @@ const firebaseConfig = {
       return;
     }
 
-    const lnUri = `lightning:${LN_ADDRESS}?amount=${msats}`;
+    statusEl.textContent = 'Generuji Lightning fakturu…';
 
-    contentEl.innerHTML = `
-      <div class="amount">${amountCzk.toLocaleString('cs-CZ')} Kč</div>
-      <div class="sats">≈ ${sats.toLocaleString('cs-CZ')} sat</div>
-      <div class="status">Přesměrovávám do peněženky…</div>
-      <a class="btn" href="${lnUri}">Otevřít peněženku ručně</a>
-    `;
+    try {
+      // 1. Rozdělení adresy na jméno a doménu
+      const [user, domain] = LN_ADDRESS.split('@');
 
-    window.location.href = lnUri;
+      // 2. Získání parametrů z .well-known endpointu
+      const lnurlpRes = await fetch(`https://${domain}/.well-known/lnurlp/${user}`);
+      if (!lnurlpRes.ok) throw new Error("Nelze načíst data Lightning adresy.");
+      const lnurlpData = await lnurlpRes.json();
+
+      // Kontrola minimálních a maximálních limitů pro danou adresu
+      if (msats < lnurlpData.minSendable || msats > lnurlpData.maxSendable) {
+        showError('Vypočtená částka je mimo povolené limity této peněženky.');
+        return;
+      }
+
+      // 3. Vygenerování BOLT11 faktury pro naši konkrétní částku
+      const callbackUrl = `${lnurlpData.callback}?amount=${msats}`;
+      const invoiceRes = await fetch(callbackUrl);
+      const invoiceData = await invoiceRes.json();
+
+      if (invoiceData.status === "ERROR") {
+        showError('Chyba při vytváření faktury: ' + invoiceData.reason);
+        return;
+      }
+
+      // 4. Předání vygenerované faktury (payment request = pr) do URI
+      const lnUri = `lightning:${invoiceData.pr}`;
+
+      contentEl.innerHTML = `
+        <div class="amount">${amountCzk.toLocaleString('cs-CZ')} Kč</div>
+        <div class="sats">≈ ${sats.toLocaleString('cs-CZ')} sat</div>
+        <div class="status">Přesměrovávám do peněženky…</div>
+        <a class="btn" href="${lnUri}">Otevřít peněženku ručně</a>
+      `;
+
+      window.location.href = lnUri;
+
+    } catch (e) {
+      showError('Nepodařilo se vygenerovat platební příkaz: ' + e.message);
+    }
   }
 
   run();
